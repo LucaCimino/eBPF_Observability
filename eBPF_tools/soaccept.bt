@@ -1,0 +1,53 @@
+#!/usr/local/bin/bpftrace
+/*
+ * soaccept - Trace socket IP-protocol accepts with details.
+ */
+
+#include <linux/in.h>
+#include <linux/in6.h>
+
+BEGIN
+{
+	printf("%-6s %-16s %-16s %-5s\n", "PID", "PROCESS",
+	    "ADDRESS", "PORT");
+}
+
+
+tracepoint:syscalls:sys_enter_accept,
+tracepoint:syscalls:sys_enter_accept4
+{
+	@sockaddr[tid] = args->upeer_sockaddr;
+}
+
+tracepoint:syscalls:sys_exit_accept,
+tracepoint:syscalls:sys_exit_accept4
+/@sockaddr[tid]/
+{
+	$sa = (struct sockaddr *)@sockaddr[tid];
+	if ($sa->sa_family == AF_INET || $sa->sa_family == AF_INET6) {
+		printf("%-6d %-16s ", pid, comm);
+
+		if ($sa->sa_family == AF_INET) {
+			$s = (struct sockaddr_in *)@sockaddr[tid];
+			$port = ($s->sin_port >> 8) |
+			    (($s->sin_port << 8) & 0xff00);
+			printf("%-16s %-5d\n",
+			    ntop(AF_INET, $s->sin_addr.s_addr),
+			    $port);
+		} else {
+			$s6 = (struct sockaddr_in6 *)@sockaddr[tid];
+			$port = ($s6->sin6_port >> 8) |
+			    (($s6->sin6_port << 8) & 0xff00);
+			printf("%-16s %-5d\n",
+			    ntop(AF_INET6, $s6->sin6_addr.in6_u.u6_addr8),
+			    $port);
+		}
+	}
+
+	delete(@sockaddr[tid]);
+}
+
+END
+{
+	clear(@sockaddr);
+}
