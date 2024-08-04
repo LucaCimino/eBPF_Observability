@@ -1,4 +1,3 @@
-# eBPF_Observability
 Exploring eBPF and its observability capabilities
 
 ### Documentation
